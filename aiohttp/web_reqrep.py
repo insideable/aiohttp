@@ -69,6 +69,16 @@ class BaseRequest(collections.MutableMapping, HeadersMixin):
         self._cache = {}
         self._task = task
 
+        # rel_url
+        # special case for path started with `//`
+        # if path starts with // it is valid host, but in case of web server
+        # liklyhood of it beein malformed path is much higher
+        url = URL(message.path)
+        if message.path.startswith('//'):
+            self.rel_url = url.with_path(message.path.split('?')[0])
+        else:
+            self.rel_url = url
+
     def clone(self, *, method=sentinel, rel_url=sentinel,
               headers=sentinel):
         """Clone itself with replacement some attributes.
@@ -183,18 +193,6 @@ class BaseRequest(collections.MutableMapping, HeadersMixin):
                       "use .url.host instead",
                       DeprecationWarning)
         return self._message.headers.get(hdrs.HOST)
-
-    @reify
-    def rel_url(self):
-        # special case for path started with `//`
-        # if path starts with // it is valid host, but in case of web server
-        # liklyhood of it beein malformed path is much higher
-        url = URL(self._message.path)
-
-        if self._message.path.startswith('//'):
-            return url.with_path(self._message.path.split('?')[0])
-
-        return url
 
     @reify
     def path_qs(self):
@@ -561,9 +559,9 @@ class StreamResponse(HeadersMixin):
         return self._reason
 
     def set_status(self, status, reason=None):
-        if self.prepared:
-            raise RuntimeError("Cannot change the response status code after "
-                               "the headers have been sent")
+        assert self.prepared, \
+            'Cannot change the response status code after ' \
+            'the headers have been sent'
         self._status = int(status)
         if reason is None:
             reason = calc_reason(status)
@@ -671,9 +669,9 @@ class StreamResponse(HeadersMixin):
         if value is not None:
             value = int(value)
             # TODO: raise error if chunked enabled
-            self.headers[hdrs.CONTENT_LENGTH] = str(value)
+            self._headers[hdrs.CONTENT_LENGTH] = str(value)
         else:
-            self.headers.pop(hdrs.CONTENT_LENGTH, None)
+            self._headers.pop(hdrs.CONTENT_LENGTH, None)
 
     @property
     def content_type(self):
@@ -821,7 +819,7 @@ class StreamResponse(HeadersMixin):
         writer = self._payload_writer = PayloadWriter(
             request._protocol.writer, request._loop)
 
-        headers = self.headers
+        headers = self._headers
         for cookie in self._cookies.values():
             value = cookie.output(header='')[1:]
             headers.add(SET_COOKIE, value)
@@ -831,9 +829,9 @@ class StreamResponse(HeadersMixin):
 
         if self._chunked:
             if version != HttpVersion11:
-                raise RuntimeError("Using chunked encoding is forbidden "
-                                   "for HTTP/{0.major}.{0.minor}".format(
-                                       request.version))
+                raise RuntimeError(
+                    "Using chunked encoding is forbidden "
+                    "for HTTP/{0.major}.{0.minor}".format(request.version))
             writer.enable_chunking()
             headers[TRANSFER_ENCODING] = 'chunked'
         else:
