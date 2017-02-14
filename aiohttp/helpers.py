@@ -551,6 +551,7 @@ class FrozenList(MutableSequence):
 
     def freeze(self):
         self._frozen = True
+        self._items = tuple(self._items)
 
     def __getitem__(self, index):
         return self._items[index]

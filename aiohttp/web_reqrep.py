@@ -59,6 +59,7 @@ class BaseRequest(collections.MutableMapping, HeadersMixin):
         self._post_files_cache = None
 
         self._payload = payload
+        self._headers = self._message.headers
 
         self._read_bytes = None
         self._has_body = not payload.at_eof()
@@ -269,7 +270,7 @@ class BaseRequest(collections.MutableMapping, HeadersMixin):
     @reify
     def headers(self):
         """A case-insensitive multidict proxy with all headers."""
-        return CIMultiDictProxy(self._message.headers)
+        return self._headers
 
     @reify
     def raw_headers(self):
@@ -559,7 +560,7 @@ class StreamResponse(HeadersMixin):
         return self._reason
 
     def set_status(self, status, reason=None):
-        assert self.prepared, \
+        assert not self.prepared, \
             'Cannot change the response status code after ' \
             'the headers have been sent'
         self._status = int(status)
@@ -763,16 +764,6 @@ class StreamResponse(HeadersMixin):
             ctype = self._content_type
         self.headers[CONTENT_TYPE] = ctype
 
-    def _start_pre_check(self, request):
-        if self._payload_writer is not None:
-            if self._req is not request:
-                raise RuntimeError(
-                    "Response has been started with different request.")
-            else:
-                return self._payload_writer
-        else:
-            return None
-
     def _do_start_compression(self, coding):
         if coding != ContentCoding.identity:
             self.headers[hdrs.CONTENT_ENCODING] = coding.value
@@ -792,11 +783,10 @@ class StreamResponse(HeadersMixin):
 
     @asyncio.coroutine
     def prepare(self, request):
-        payload_writer = self._start_pre_check(request)
-        if payload_writer is not None:
-            return payload_writer
-        yield from request._prepare_hook(self)
+        if self._payload_writer is not None:
+            return self._payload_writer
 
+        yield from request._prepare_hook(self)
         return self._start(request)
 
     def _start(self, request,
