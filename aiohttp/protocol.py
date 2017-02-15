@@ -9,7 +9,6 @@ import sys
 import zlib
 from abc import ABC, abstractmethod
 from enum import IntEnum
-from ipaddress import ip_address
 from urllib.parse import SplitResult
 from wsgiref.handlers import format_date_time
 
@@ -966,21 +965,10 @@ class Request(HttpMessage):
                 self._version >= HttpVersion11)
 
 
-class URL(yarl.URL):
-
-    def __new__(cls, schema, host, port, path, query, fragment, userinfo):
-        return super(URL, cls).__new__(cls)
+class URL(yarl.BaseURL):
 
     def __init__(self, schema, netloc, port, path, query, fragment, userinfo):
         self._strict = False
-
-        try:
-            ip = ip_address(netloc)
-        except:
-            pass
-        else:
-            if ip.version == 6:
-                netloc = '['+netloc+']'
 
         if port:
             netloc += ':{}'.format(port)
