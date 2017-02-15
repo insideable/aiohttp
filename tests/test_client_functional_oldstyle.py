@@ -536,10 +536,10 @@ class TestHttpClientFunctional(unittest.TestCase):
             self.assertEqual(str(len(data)),
                              content['headers']['Content-Length'])
 
-    def _test_request_conn_closed(self):
+    def test_request_conn_closed(self):
         with run_server(self.loop, router=Functional) as httpd:
             httpd['close'] = True
-            with self.assertRaises(aiohttp.ClientHttpProcessingError):
+            with self.assertRaises(aiohttp.ServerDisconnectedError):
                 self.loop.run_until_complete(
                     client.request('get', httpd.url('method', 'get'),
                                    loop=self.loop))
